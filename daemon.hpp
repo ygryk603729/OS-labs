@@ -1,26 +1,26 @@
-#ifndef DAEMON_HPP
-#define DAEMON_HPP
-
+#pragma once
 #include <string>
 
 class Daemon {
 private:
-    static Daemon* instance; // Единственный экземпляр
-    std::string dir1, dir2;  // Пути к папкам
-    std::string config_path; // Путь к конфиг-файлу
-    std::string pid_file;    // Путь к PID-файлу
-    int interval;            // Интервал (секунды)
+    static Daemon* instance;
+    std::string dir1, dir2, config_path, pid_file;
+    int interval;
 
-    Daemon(); // Приватный конструктор
+    Daemon();
+    Daemon(const Daemon&) = delete;
+    Daemon& operator=(const Daemon&) = delete;
 
-public:
-    static Daemon* getInstance();
     void daemonize();
     void readConfig();
     void run();
+    void clearDir2();
+    void copyBkFiles();
     static void handleSignal(int sig);
     void checkPidFile();
     void log(const std::string& msg, int level);
-};
 
-#endif
+public:
+    static Daemon* getInstance();
+    static void start();
+};

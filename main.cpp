@@ -1,9 +1,6 @@
 #include "daemon.hpp"
 
 int main() {
-    Daemon* daemon = Daemon::getInstance();
-    daemon->daemonize();
-    daemon->readConfig();
-    daemon->run();
+    Daemon::start();
     return 0;
 }
