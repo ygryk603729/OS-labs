@@ -19,7 +19,7 @@ private:
     static void handleSignal(int sig);
     void checkPidFile();
     void log(const std::string& msg, int level);
-
+    void ensureDirExists(const std::string& path);
 public:
     static Daemon* getInstance();
     static void start();

@@ -16,7 +16,9 @@
 
 Daemon* Daemon::instance = nullptr;
 
-Daemon::Daemon() : dir1("/home/user/source"), dir2("/home/user/destination"), config_path("/home/user/daemon_lab/config.conf"), pid_file("/var/run/mydaemon.pid"), interval(30) {}
+Daemon::Daemon() 
+    : config_path("config.conf"),      // относительный путь
+      pid_file("/var/run/mydaemon.pid") {}
 
 Daemon* Daemon::getInstance() {
     if (!instance) {
@@ -33,6 +35,12 @@ void Daemon::start() {
     daemon->run();
 }
 
+void Daemon::ensureDirExists(const std::string& path) {
+    if (mkdir(path.c_str(), 0755) == -1 && errno != EEXIST) {
+        log("Failed to create directory: " + path, LOG_ERR);
+    }
+}
+
 void Daemon::daemonize() {
     pid_t pid = fork();
     if (pid < 0) { log("Fork failed", LOG_ERR); exit(EXIT_FAILURE); }
@@ -42,7 +50,7 @@ void Daemon::daemonize() {
     if (pid < 0) { log("Second fork failed", LOG_ERR); exit(EXIT_FAILURE); }
     if (pid > 0) exit(EXIT_SUCCESS);
     umask(0);
-    chdir("/");
+    //chdir("/");
     for (int i = sysconf(_SC_OPEN_MAX); i >= 0; i--) close(i);
     open("/dev/null", O_RDWR);
     dup(0);
@@ -51,6 +59,7 @@ void Daemon::daemonize() {
 }
 
 void Daemon::clearDir2() {
+    ensureDirExists(dir2);
     DIR* dir = opendir(dir2.c_str());
     if (!dir) {
         log("Failed to open dir2: " + dir2, LOG_ERR);
@@ -71,11 +80,13 @@ void Daemon::clearDir2() {
 }
 
 void Daemon::copyBkFiles() {
+    ensureDirExists(dir1);
     DIR* dir = opendir(dir1.c_str());
     if (!dir) {
         log("Failed to open dir1: " + dir1, LOG_ERR);
         return;
     }
+    ensureDirExists(dir2);
     struct dirent* entry;
     while ((entry = readdir(dir))) {
         if (entry->d_type == DT_REG) {
@@ -100,31 +111,29 @@ void Daemon::copyBkFiles() {
 }
 
 void Daemon::readConfig() {
-    char abs_path[PATH_MAX];
-    if (realpath(config_path.c_str(), abs_path) == nullptr) {
-        log("Failed to resolve config path", LOG_ERR);
-        return;
-    }
-    config_path = abs_path;
+    // Значения по умолчанию
+    dir1 = "/tmp/source";
+    dir2 = "/tmp/target";
+    interval = 30;
+
     std::ifstream configFile(config_path);
     if (!configFile.is_open()) {
-        log("Failed to open config file", LOG_ERR);
-        return;
+        log("Failed to open config file: " + config_path + " (using defaults)", LOG_WARNING);
+    } else {
+        std::string line;
+        while (std::getline(configFile, line)) {
+            if (line.find("dir1=") == 0) dir1 = line.substr(5);
+            else if (line.find("dir2=") == 0) dir2 = line.substr(5);
+            else if (line.find("interval=") == 0) {
+                try { interval = std::stoi(line.substr(9)); }
+                catch (...) { interval = 30; }
+            }
+        }
+        configFile.close();
     }
-    std::string line;
-    while (std::getline(configFile, line)) {
-        if (line.find("dir1=") == 0) {
-            dir1 = line.substr(5);
-        }
-        else if (line.find("dir2=") == 0) {
-            dir2 = line.substr(5);
-        }
-        else if (line.find("interval=") == 0) {
-            interval = std::stoi(line.substr(9));
-        }
-    }
-    configFile.close();
-    log("Config read: dir1=" + dir1 + ", dir2=" + dir2 + ", interval=" + std::to_string(interval), LOG_INFO);
+
+    log("Config read: dir1=" + dir1 + ", dir2=" + dir2 + 
+        ", interval=" + std::to_string(interval), LOG_INFO);
 }
 
 void Daemon::run() {
